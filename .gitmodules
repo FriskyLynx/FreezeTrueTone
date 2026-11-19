@@ -1,0 +1,3 @@
+[submodule "macbook-als-spectral"]
+	path = macbook-als-spectral
+	url = https://github.com/8rulerstar/macbook-als-spectral.git
