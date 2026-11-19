@@ -14,7 +14,10 @@ While the lid is **open**, the script reads the MacBook's ambient-light sensor a
 
 ## Setup
 
-1. Download or clone this repository.
+1. Download or clone this repository RECURSIVELY!
+```bash
+git clone --recurse-submodules https://github.com/Aurardian/FreezeTrueTone.git
+```
 2. Open a Terminal
 3. Leave macOS True Tone enabled if you normally use it.
 
