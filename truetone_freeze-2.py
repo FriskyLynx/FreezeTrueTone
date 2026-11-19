@@ -42,6 +42,11 @@ CG_ID = C.c_uint32
 CG_FLOAT = C.c_float
 STATE_FILE = Path.home() / ".local" / "state" / "truetone-freeze" / "last.json"
 
+ALS_DIR = (
+    Path(__file__).resolve().parent
+    / "macbook-als-spectral"
+)
+
 
 def clamp(v: float, lo: float, hi: float) -> float:
     return min(hi, max(lo, v))
@@ -318,15 +323,16 @@ def main() -> None:
         print("Resetting ColorSync gamma tables for all displays...")
         CoreGraphics().reset()
         return
-
+    if not ALS_DIR.is_dir():
+        raise RuntimeError(f"ALS dependency directory not found: {ALS_DIR}")
+    sys.path.insert(0, str(ALS_DIR))
     # The user has already tested this ALS reader with color_live.py.
     try:
         from als_decode import decode_fields
         from als_hid import open_als, pump, warn_if_unverified_model
     except ImportError as exc:
         raise RuntimeError(
-            "Place truetone_freeze.py in the macbook-als-spectral folder "
-            "next to als_decode.py and als_hid.py"
+            f"Could not import ALS modules from {ALS_DIR}"
         ) from exc
 
     warn_if_unverified_model()
@@ -355,17 +361,18 @@ def main() -> None:
     last_lid: bool | None = None
     last_save = 0.0
     last_tick = time.monotonic()
-    should_stop = False
+    stop_requested = False
 
-    def stop_handler(signum: int, _frame: object) -> None:
-        nonlocal should_stop
-        should_stop = True
+    def handle_sigint(signum, frame):
+        nonlocal stop_requested
+        stop_requested = True
 
-    signal.signal(signal.SIGTERM, stop_handler)
+    signal.signal(signal.SIGTERM, handle_sigint)
+    signal.signal(signal.SIGINT, handle_sigint)
     # SIGINT is left as KeyboardInterrupt so the CFRunLoop can be interrupted.
 
     try:
-        while not should_stop:
+        while not stop_requested:
             # CFRunLoopRunInMode may return early when the ALS stops reporting
             # (particularly in clamshell mode). Keep the polling interval fixed.
             poll_start = time.monotonic()
@@ -421,8 +428,6 @@ def main() -> None:
                     # Crucially, never write a tint while the lid is open.
                     # Restore only a tint previously written by this process.
                     controller.restore()
-    except KeyboardInterrupt:
-        pass
     finally:
         print("\nExiting...", flush=True)
         if controller is not None:
