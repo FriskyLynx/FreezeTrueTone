@@ -308,7 +308,7 @@ class DisplayController:
 
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--strength", type=float, default=0.85, help="adaptation strength, 0..2 (default 0.85)")
+    ap.add_argument("--strength", type=float, default=0.80, help="adaptation strength, 0..2 (default 0.80)")
     ap.add_argument("--interval", type=float, default=5.0, help="update interval seconds (default 5.0)")
     ap.add_argument("--display-id", type=int, help="restrict adjustments to a particular external display ID")
     ap.add_argument("--dry-run", action="store_true", help="calculate and print gains without changing displays")
