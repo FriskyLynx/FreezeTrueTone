@@ -7,30 +7,135 @@
 
 import SwiftUI
 import CoreGraphics
+import ServiceManagement
 @main
 struct FreezeTrueToneApp: App {
-    @StateObject private var python = PythonRunner()
-    var body: some Scene {
-        MenuBarExtra("Test Utility", systemImage: "sun.max") {
-            Text("Hello bro")
-            Divider()
-            Button("Start Script"){
-                python.start()
-            }
-            .disabled(python.isRunning)
-            
-            Divider()
-            Button("Stop Script"){
-                python.stop()
-            }
-            .disabled(!python.isRunning)
-            Divider()
-            Button("Quit App"){
-                python.stop()
-                NSApplication.shared.terminate(nil)
-            }
+    @NSApplicationDelegateAdaptor(AppDelegate.self)
+    private var appDelegate
+
+    @StateObject private var python = PythonRunner.shared
+    @AppStorage("strength") private var strength = 0.75
+    @AppStorage("interval") private var interval = 5.0
+    @State private var launchAtLogin =
+        SMAppService.mainApp.status == .enabled
+
+    @State private var loginItemError: String?
+    private var strengthBinding: Binding<Double> {
+            Binding(
+                get: { strength },
+                set: { newValue in
+                    strength = newValue
+                    python.updateConfiguration(
+                        strength: newValue,
+                        interval: interval
+                    )
+                }
+            )
         }
-        .menuBarExtraStyle(.menu)
+    private var intervalBinding: Binding<Double> {
+           Binding(
+               get: { interval },
+               set: { newValue in
+                   interval = newValue
+                   python.updateConfiguration(
+                       strength: strength,
+                       interval: newValue
+                   )
+               }
+           )
+       }
+    var body: some Scene {
+        MenuBarExtra {
+            VStack(alignment: .leading, spacing: 12) {
+                Text("Freeze True Tone, made by Frisky")
+                
+                Divider()
+                
+                Toggle("Launch at Login", isOn: Binding(
+                    get: { launchAtLogin },
+                    set: { enabled in
+                        do {
+                            if enabled {
+                                try SMAppService.mainApp.register()
+                            } else {
+                                try SMAppService.mainApp.unregister()
+                            }
+
+                            launchAtLogin =
+                                SMAppService.mainApp.status == .enabled
+
+                            loginItemError = nil
+
+                        } catch {
+                            launchAtLogin =
+                                SMAppService.mainApp.status == .enabled
+
+                            loginItemError = error.localizedDescription
+                            print("Login item error:", error)
+                        }
+                    }
+                ))
+
+                if let loginItemError {
+                    Text(loginItemError)
+                        .font(.caption)
+                        .foregroundStyle(.red)
+                }
+                
+                Button("Start True Tone") {
+                    python.start(
+                        strength: strength,
+                        interval: interval
+                    )
+                }
+                .disabled(python.isRunning)
+                
+                Button("Stop True Tone") {
+                    python.stop()
+                }
+                .disabled(!python.isRunning)
+                
+                Divider()
+                
+                VStack(alignment: .leading) {
+                    Text("Correction Strength: \(strength, specifier: "%.2f")")
+                    
+                    Slider(
+                        value: strengthBinding,
+                        in: 0...2,
+                        step: 0.05
+                    )
+                }
+                
+                Menu("Configuration") {
+                    
+                    Picker("Update Interval", selection: intervalBinding) {
+                        Text("1 second").tag(1.0)
+                        Text("2 seconds").tag(2.0)
+                        Text("5 seconds").tag(5.0)
+                        Text("10 seconds").tag(10.0)
+                    }
+                }
+                Divider()
+                Button("Quit App"){
+                    python.stop()
+                    NSApplication.shared.terminate(nil)
+                }
+            }
+            .padding(.horizontal, 20)
+            .padding(.vertical, 12)
+            .frame(width: 260)
+            .onAppear {
+                launchAtLogin = SMAppService.mainApp.status == .enabled
+            }
+        }label: {
+                Image(systemName: python.isRunning
+                      ? "sun.max.fill"
+                      : "sun.max")
+            }
+            .menuBarExtraStyle(.window)
+            
+        
     }
     
     func runPython() {

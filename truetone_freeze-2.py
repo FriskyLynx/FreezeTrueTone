@@ -30,12 +30,14 @@ import ctypes as C
 from dataclasses import dataclass
 import json
 import math
+import queue
 import os
 from pathlib import Path
 import re
 import signal
 import subprocess
 import sys
+import threading
 import time
 
 CG_ID = C.c_uint32
@@ -362,6 +364,24 @@ def main() -> None:
     last_save = 0.0
     last_tick = time.monotonic()
     stop_requested = False
+    last_valid_sensor: tuple[float, float] | None = None
+
+    # Read newline-delimited JSON sent by the Swift app over stdin.
+    # Keep stdin off the main thread so ALS polling never waits for input.
+    config_messages: queue.Queue[dict] = queue.Queue()
+
+    def read_config_messages() -> None:
+        for line in sys.stdin:
+            try:
+                value = json.loads(line)
+                if isinstance(value, dict):
+                    config_messages.put(value)
+                else:
+                    print("Ignoring config update: expected a JSON object", file=sys.stderr, flush=True)
+            except json.JSONDecodeError as exc:
+                print(f"Ignoring invalid config JSON: {exc}", file=sys.stderr, flush=True)
+
+    threading.Thread(target=read_config_messages, daemon=True).start()
 
     def handle_sigint(signum, frame):
         nonlocal stop_requested
@@ -373,6 +393,38 @@ def main() -> None:
 
     try:
         while not stop_requested:
+            # Apply any pending updates on the main thread, where gains and
+            # args are used. Config values can change without restarting ALS.
+            while True:
+                try:
+                    message = config_messages.get_nowait()
+                except queue.Empty:
+                    break
+
+                try:
+                    new_strength = float(message.get("strength", args.strength))
+                    new_interval = float(message.get("interval", args.interval))
+                except (TypeError, ValueError):
+                    print("Ignoring config: strength/interval must be numbers", file=sys.stderr, flush=True)
+                    continue
+
+                if not (math.isfinite(new_strength) and 0.0 <= new_strength <= 2.0
+                        and math.isfinite(new_interval) and 0.2 <= new_interval <= 10.0):
+                    print("Ignoring config: strength must be 0..2 and interval 0.2..10", file=sys.stderr, flush=True)
+                    continue
+
+                strength_changed = new_strength != args.strength
+                args.strength = new_strength
+                args.interval = new_interval
+                print(f"Updated config: strength={args.strength:.2f}, interval={args.interval:.2f}s", flush=True)
+
+                # Even with the lid closed, use the last sample collected while
+                # it was open so strength changes can affect the frozen tint.
+                if strength_changed and last_valid_sensor is not None:
+                    gains, _ = calculate_gains(*last_valid_sensor, args.strength)
+                    save_gains(gains)
+                    last_save = time.monotonic()
+
             # CFRunLoopRunInMode may return early when the ALS stops reporting
             # (particularly in clamshell mode). Keep the polling interval fixed.
             poll_start = time.monotonic()
@@ -411,6 +463,7 @@ def main() -> None:
                 except ValueError:
                     pass
                 else:
+                    last_valid_sensor = (lux, kelvin)
                     # 4-second time constant for smooth transitions.
                     alpha = 1.0 - math.exp(-elapsed / 4.0)
                     gains = tuple(x + alpha * (y - x) for x, y in zip(gains, target))  # type: ignore[assignment]

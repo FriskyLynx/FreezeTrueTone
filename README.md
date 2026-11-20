@@ -6,6 +6,12 @@ While the lid is **open**, the script reads the MacBook's ambient-light sensor a
 
 > It's not 100% accurate, but close enough to be nearly unnoticable.
 
+## Features
+
+- Start automatically (can be toggled)
+- Adjustment of the color strength and refresh interval
+- automatic saving of configuration and last known True Tone color
+
 ## Requirements
 
 - macOS on a supported MacBook with an accessible ambient-light sensor (see [macbook-als-spectral](https://github.com/8rulerstar/macbook-als-spectral) for a list of supported devices, your device not being on the list does not necessarily mean it wont work

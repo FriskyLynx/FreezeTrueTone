@@ -1,20 +1,15 @@
-//
-//  PythonRunner.swift
-//  FreezeTrueTone
-//
-//  Created by frisky (aurardian) on 20.11.26.
-//
-
 
 import Foundation
 import Combine
 
-class PythonRunner: ObservableObject {
+final class PythonRunner: ObservableObject {
+    static let shared = PythonRunner()
     @Published private(set) var isRunning = false
 
     private var process: Process?
+    private var inputPipe: Pipe?
 
-    func start() {
+    func start(strength: Double, interval: Double) {
         guard !isRunning,
               let resources = Bundle.main.resourceURL else {
             return
@@ -30,21 +25,29 @@ class PythonRunner: ObservableObject {
             .appendingPathComponent("truetone_freeze-2.py")
 
         let task = Process()
+        let pipe = Pipe()
+
         task.executableURL = python
-        task.arguments = ["-B", script.path]
+        task.arguments = [
+            "-B", script.path,
+            "--strength", String(strength),
+            "--interval", String(interval)
+        ]
         task.currentDirectoryURL = resources
+        task.standardInput = pipe
 
         var environment = ProcessInfo.processInfo.environment
         environment["PYTHONHOME"] = pythonHome.path
         environment["PYTHONNOUSERSITE"] = "1"
         task.environment = environment
 
-        // Automatically detect when Python exits
         task.terminationHandler = { [weak self] finished in
             DispatchQueue.main.async {
                 guard let self,
                       self.process === finished else { return }
 
+                self.inputPipe?.fileHandleForWriting.closeFile()
+                self.inputPipe = nil
                 self.process = nil
                 self.isRunning = false
                 print("Python stopped")
@@ -53,11 +56,41 @@ class PythonRunner: ObservableObject {
 
         do {
             try task.run()
+            inputPipe = pipe
             process = task
             isRunning = true
-            print("Python started, PID:", task.processIdentifier)
+            print("Python started")
         } catch {
             print("Python error:", error)
+        }
+    }
+
+    // Send configuration updates to running Python
+    func updateConfiguration(strength: Double, interval: Double) {
+        guard process?.isRunning == true,
+              let inputPipe else {
+            return
+        }
+
+        let config: [String: Double] = [
+            "strength": strength,
+            "interval": interval
+        ]
+
+        do {
+            var data = try JSONSerialization.data(
+                withJSONObject: config
+            )
+
+            // Every JSON message ends with a newline
+            data.append(0x0A)
+
+            try inputPipe.fileHandleForWriting
+                .write(contentsOf: data)
+
+            print("Updated Python configuration:", config)
+        } catch {
+            print("Failed to send configuration:", error)
         }
     }
 
