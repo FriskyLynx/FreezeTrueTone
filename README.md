@@ -29,7 +29,12 @@ the App on a MacBook Air M5, compatibility with older Intel based MacBooks is no
 git clone --recurse-submodules https://github.com/Aurardian/FreezeTrueTone.git
 ```
 2. Open the folder in Xcode
-3. Leave macOS True Tone enabled if you normally use it.
+3. Build the App:
+   The Xcode project is set up for Apple Silicon Macs.
+   Changing it over to Intel is trivial, however, the included
+   Python runtime must be switched to an Intel Build!
+   Use Python 3.15.X, graciously compiled by Astral-sh
+   [python-build-standalone](https://github.com/astral-sh/python-build-standalone/releases)
 
 ## Usage
 
