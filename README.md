@@ -1,5 +1,7 @@
 # TrueTone Freeze
 
+![Screenshot of the App](https://github.com/Aurardian/FreezeTrueTone/blob/8a2d3286d4e31f30dbd917129bb2170bcda283f7/Screenshot.png)
+
 Keep the last ambient-light color adjustment on an external monitor when closing your MacBook lid.
 
 While the lid is **open**, the script reads the MacBook's ambient-light sensor and leaves macOS True Tone untouched. When the lid is **closed**, it applies an approximate color correction to connected external displays using CoreGraphics gamma tables. Opening the lid again removes the script's correction.
